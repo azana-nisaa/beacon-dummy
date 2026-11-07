@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>Beacon — DR Canary</title>
+  <meta name="description" content="Lightweight dummy website for disaster recovery drills. If this page loads, the VM is serving HTTP.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css?v=2">
+</head>
+<body>
+  <div class="sky" aria-hidden="true">
+    <div class="stars"></div>
+    <div class="glow"></div>
+    <svg class="lighthouse" viewBox="0 0 280 320" fill="none">
+      <defs>
+        <linearGradient id="beam" x1="140" y1="70" x2="280" y2="40">
+          <stop stop-color="#f5c16c" stop-opacity="0.55"/>
+          <stop offset="1" stop-color="#f5c16c" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon class="beam beam-r" fill="url(#beam)" points="148,78 280,28 280,92"/>
+      <polygon class="beam beam-l" fill="url(#beam)" points="132,78 0,28 0,92"/>
+      <path d="M20 292h240" stroke="#6ee7d2" stroke-opacity=".35" stroke-width="2"/>
+      <path d="M36 300c30-14 70-14 104 0 34-14 74-14 104 0" stroke="#6ee7d2" stroke-opacity=".2"/>
+      <path d="M88 286l24-18h56l24 18H88z" fill="#131a2e" stroke="#e8edf7" stroke-opacity=".2"/>
+      <path d="M118 268V118h44v150" fill="#d7deea"/>
+      <path d="M118 168h44" stroke="#0b1020" stroke-opacity=".2"/>
+      <path d="M118 208h44" stroke="#0b1020" stroke-opacity=".2"/>
+      <rect x="110" y="100" width="60" height="22" rx="2" fill="#f5c16c"/>
+      <rect x="122" y="88" width="36" height="14" fill="#e8edf7"/>
+      <path d="M140 52l18 36H122l18-36z" fill="#f5c16c"/>
+      <circle cx="140" cy="78" r="5" fill="#0b1020"/>
+    </svg>
+  </div>
+
+  <header class="top">
+    <a class="brand" href="/">
+      <span class="mark" aria-hidden="true"></span>
+      <span>Beacon</span>
+    </a>
+    <div class="top-actions">
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-lang="en" class="is-on">EN</button>
+        <button type="button" data-lang="id">ID</button>
+      </div>
+      <span class="pill" id="live-pill">
+        <span class="dot"></span>
+        <span data-i18n="pill">ONLINE</span>
+      </span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <p class="eyebrow" data-i18n="eyebrow">Disaster recovery canary</p>
+      <h1 data-i18n="headline">If you can see this page, the dummy VM is alive.</h1>
+      <p class="lede" data-i18n="lede">Lightweight proof-of-life for failover tests. No database, no login, no blank “it works” screen — just a page you can actually screenshot for the report.</p>
+    </section>
+
+    <section class="ticket" id="proof" aria-label="Proof of life">
+      <div class="ticket-head">
+        <span data-i18n="proof">PROOF OF LIFE</span>
+        <strong id="ticket-state">ONLINE</strong>
+      </div>
+      <div class="ticket-grid">
+        <div>
+          <span data-i18n="host">HOST</span>
+          <b id="val-host">…</b>
+        </div>
+        <div>
+          <span data-i18n="address">ADDRESS</span>
+          <b id="val-ip">…</b>
+        </div>
+        <div>
+          <span data-i18n="time">TIME</span>
+          <b id="val-time">…</b>
+        </div>
+        <div>
+          <span data-i18n="role">ROLE</span>
+          <b id="val-role">…</b>
+        </div>
+        <div>
+          <span data-i18n="site">SITE</span>
+          <b id="val-site">…</b>
+        </div>
+        <div>
+          <span data-i18n="uptime">UPTIME</span>
+          <b id="val-uptime">…</b>
+        </div>
+      </div>
+      <div class="ticket-foot">
+        <canvas id="identicon" width="72" height="72" aria-hidden="true"></canvas>
+        <p data-i18n="fingerprint">Hostname fingerprint — primary and DR boxes will not look the same.</p>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="Live telemetry">
+      <article>
+        <span data-i18n="requests">Requests served</span>
+        <strong id="val-req">0</strong>
+      </article>
+      <article>
+        <span data-i18n="pid">Process</span>
+        <strong id="val-pid">—</strong>
+      </article>
+      <article>
+        <span data-i18n="python">Runtime</span>
+        <strong id="val-py">—</strong>
+      </article>
+      <article>
+        <span data-i18n="health">Health</span>
+        <strong id="val-health">…</strong>
+      </article>
+    </section>
+
+    <section class="about">
+      <div>
+        <h2 data-i18n="whyTitle">Why this exists</h2>
+        <p data-i18n="whyBody">DR tests often recover a VM that nobody can prove is actually serving traffic. Beacon is a tiny public dummy: clone it, run one script, open a browser. If the beam is on, HTTP is working.</p>
+      </div>
+      <ul>
+        <li data-i18n="why1">One Python file. No packages to install.</li>
+        <li data-i18n="why2">`/health` for load balancers, `/api/status` for JSON evidence.</li>
+        <li data-i18n="why3">Works as a systemd service on a Linux dummy VM.</li>
+        <li data-i18n="why4">Safe to share. There is nothing confidential on this page.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Beacon Dummy</span>
+    <a href="/api/status">/api/status</a>
+    <a href="/health">/health</a>
+  </footer>
+
+  <script src="/app.js?v=2"></script>
+</body>
+</html>
