@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1020">
-  <title>Beacon — DR Canary</title>
-  <meta name="description" content="Lightweight dummy website for disaster recovery drills. If this page loads, the VM is serving HTTP.">
+  <meta name="theme-color" content="#16141a">
+  <title>Beacon</title>
+  <meta name="description" content="A small dummy website for DR day. If this page opens, the VM is serving HTTP.">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=2">
+  <link rel="stylesheet" href="/styles.css?v=4">
 </head>
 <body>
   <div class="sky" aria-hidden="true">
@@ -16,115 +16,118 @@
     <svg class="lighthouse" viewBox="0 0 280 320" fill="none">
       <defs>
         <linearGradient id="beam" x1="140" y1="70" x2="280" y2="40">
-          <stop stop-color="#f5c16c" stop-opacity="0.55"/>
-          <stop offset="1" stop-color="#f5c16c" stop-opacity="0"/>
+          <stop stop-color="#e0b56a" stop-opacity="0.5"/>
+          <stop offset="1" stop-color="#e0b56a" stop-opacity="0"/>
         </linearGradient>
       </defs>
       <polygon class="beam beam-r" fill="url(#beam)" points="148,78 280,28 280,92"/>
       <polygon class="beam beam-l" fill="url(#beam)" points="132,78 0,28 0,92"/>
-      <path d="M20 292h240" stroke="#6ee7d2" stroke-opacity=".35" stroke-width="2"/>
-      <path d="M36 300c30-14 70-14 104 0 34-14 74-14 104 0" stroke="#6ee7d2" stroke-opacity=".2"/>
-      <path d="M88 286l24-18h56l24 18H88z" fill="#131a2e" stroke="#e8edf7" stroke-opacity=".2"/>
-      <path d="M118 268V118h44v150" fill="#d7deea"/>
-      <path d="M118 168h44" stroke="#0b1020" stroke-opacity=".2"/>
-      <path d="M118 208h44" stroke="#0b1020" stroke-opacity=".2"/>
-      <rect x="110" y="100" width="60" height="22" rx="2" fill="#f5c16c"/>
-      <rect x="122" y="88" width="36" height="14" fill="#e8edf7"/>
-      <path d="M140 52l18 36H122l18-36z" fill="#f5c16c"/>
-      <circle cx="140" cy="78" r="5" fill="#0b1020"/>
+      <path d="M20 292h240" stroke="#7ec49d" stroke-opacity=".3" stroke-width="2"/>
+      <path d="M36 300c30-14 70-14 104 0 34-14 74-14 104 0" stroke="#7ec49d" stroke-opacity=".16"/>
+      <path d="M88 286l24-18h56l24 18H88z" fill="#1e1b22" stroke="#f3eee6" stroke-opacity=".16"/>
+      <path d="M118 268V118h44v150" fill="#e6dfd2"/>
+      <path d="M118 168h44" stroke="#16141a" stroke-opacity=".18"/>
+      <path d="M118 208h44" stroke="#16141a" stroke-opacity=".18"/>
+      <rect x="110" y="100" width="60" height="22" rx="2" fill="#e0b56a"/>
+      <rect x="122" y="88" width="36" height="14" fill="#f3eee6"/>
+      <path d="M140 52l18 36H122l18-36z" fill="#e0b56a"/>
+      <circle cx="140" cy="78" r="5" fill="#16141a"/>
     </svg>
   </div>
 
   <header class="top">
     <a class="brand" href="/">
       <span class="mark" aria-hidden="true"></span>
-      <span>Beacon</span>
+      Beacon
     </a>
     <div class="top-actions">
       <div class="lang" role="group" aria-label="Language">
         <button type="button" data-lang="en" class="is-on">EN</button>
         <button type="button" data-lang="id">ID</button>
       </div>
-      <span class="pill" id="live-pill">
-        <span class="dot"></span>
-        <span data-i18n="pill">ONLINE</span>
+      <span class="live" id="live-pill">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span data-i18n="pill">Online</span>
       </span>
     </div>
   </header>
 
   <main class="wrap">
     <section class="hero">
-      <p class="eyebrow" data-i18n="eyebrow">Disaster recovery canary</p>
-      <h1 data-i18n="headline">If you can see this page, the dummy VM is alive.</h1>
-      <p class="lede" data-i18n="lede">Lightweight proof-of-life for failover tests. No database, no login, no blank “it works” screen — just a page you can actually screenshot for the report.</p>
+      <p class="eyebrow" data-i18n="eyebrow">Dummy site for DR day</p>
+      <h1 data-i18n="headline">The dummy VM is up.</h1>
+      <p class="lede" data-i18n="lede">A small page you can screenshot. No login, no database, nothing to babysit.</p>
     </section>
 
-    <section class="ticket" id="proof" aria-label="Proof of life">
-      <div class="ticket-head">
-        <span data-i18n="proof">PROOF OF LIFE</span>
-        <strong id="ticket-state">ONLINE</strong>
+    <section class="card" id="proof" aria-label="This machine">
+      <div class="card-head">
+        <span data-i18n="proof">This machine</span>
+        <span class="live" id="card-live">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span data-i18n="pill">Online</span>
+        </span>
       </div>
-      <div class="ticket-grid">
+      <div class="card-grid">
         <div>
-          <span data-i18n="host">HOST</span>
-          <b id="val-host">…</b>
+          <span data-i18n="host">Host</span>
+          <b id="val-host">...</b>
         </div>
         <div>
-          <span data-i18n="address">ADDRESS</span>
-          <b id="val-ip">…</b>
+          <span data-i18n="address">Address</span>
+          <b id="val-ip">...</b>
         </div>
         <div>
-          <span data-i18n="time">TIME</span>
-          <b id="val-time">…</b>
+          <span data-i18n="time">Time</span>
+          <b id="val-time">...</b>
         </div>
         <div>
-          <span data-i18n="role">ROLE</span>
-          <b id="val-role">…</b>
+          <span data-i18n="role">Role</span>
+          <b id="val-role">...</b>
         </div>
         <div>
-          <span data-i18n="site">SITE</span>
-          <b id="val-site">…</b>
+          <span data-i18n="site">Site</span>
+          <b id="val-site">...</b>
         </div>
         <div>
-          <span data-i18n="uptime">UPTIME</span>
-          <b id="val-uptime">…</b>
+          <span data-i18n="uptime">Uptime</span>
+          <b id="val-uptime">...</b>
         </div>
       </div>
-      <div class="ticket-foot">
+      <div class="card-foot">
         <canvas id="identicon" width="72" height="72" aria-hidden="true"></canvas>
-        <p data-i18n="fingerprint">Hostname fingerprint — primary and DR boxes will not look the same.</p>
+        <p data-i18n="fingerprint">A little pattern from the hostname, so the primary and DR boxes look different.</p>
       </div>
     </section>
 
-    <section class="stats" aria-label="Live telemetry">
+    <section class="stats" aria-label="Live numbers">
       <article>
-        <span data-i18n="requests">Requests served</span>
+        <span data-i18n="requests">Requests</span>
         <strong id="val-req">0</strong>
       </article>
       <article>
         <span data-i18n="pid">Process</span>
-        <strong id="val-pid">—</strong>
+        <strong id="val-pid">...</strong>
       </article>
       <article>
         <span data-i18n="python">Runtime</span>
-        <strong id="val-py">—</strong>
+        <strong id="val-py">...</strong>
       </article>
       <article>
         <span data-i18n="health">Health</span>
-        <strong id="val-health">…</strong>
+        <strong id="val-health">...</strong>
       </article>
     </section>
 
     <section class="about">
       <div>
-        <h2 data-i18n="whyTitle">Why this exists</h2>
-        <p data-i18n="whyBody">DR tests often recover a VM that nobody can prove is actually serving traffic. Beacon is a tiny public dummy: clone it, run one script, open a browser. If the beam is on, HTTP is working.</p>
+        <h2 data-i18n="whyTitle">Why this is here</h2>
+        <p data-i18n="whyBody">You recover a VM, then someone asks if a website actually answers. Drop this on the dummy box, open it, take the screenshot.</p>
       </div>
       <ul>
-        <li data-i18n="why1">One Python file. No packages to install.</li>
-        <li data-i18n="why2">`/health` for load balancers, `/api/status` for JSON evidence.</li>
-        <li data-i18n="why3">Works as a systemd service on a Linux dummy VM.</li>
-        <li data-i18n="why4">Safe to share. There is nothing confidential on this page.</li>
+        <li data-i18n="why1">Just Python. Nothing extra to install.</li>
+        <li data-i18n="why2">/health for monitors, /api/status for the raw details.</li>
+        <li data-i18n="why3">One setup script on Linux.</li>
+        <li data-i18n="why4">Nothing private on this page. Fine to share.</li>
       </ul>
     </section>
   </main>
@@ -135,6 +138,6 @@
     <a href="/health">/health</a>
   </footer>
 
-  <script src="/app.js?v=2"></script>
+  <script src="/app.js?v=4"></script>
 </body>
 </html>

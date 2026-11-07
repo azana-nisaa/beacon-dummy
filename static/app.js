@@ -1,61 +1,63 @@
 const COPY = {
   en: {
-    pill: "ONLINE",
-    eyebrow: "Disaster recovery canary",
-    headline: "If you can see this page, the dummy VM is alive.",
-    lede: "Lightweight proof-of-life for failover tests. No database, no login, no blank “it works” screen — just a page you can actually screenshot for the report.",
-    proof: "PROOF OF LIFE",
-    host: "HOST",
-    address: "ADDRESS",
-    time: "TIME",
-    role: "ROLE",
-    site: "SITE",
-    uptime: "UPTIME",
-    fingerprint: "Hostname fingerprint — primary and DR boxes will not look the same.",
-    requests: "Requests served",
+    pill: "Online",
+    eyebrow: "Dummy site for DR day",
+    headline: "The dummy VM is up.",
+    lede: "A small page you can screenshot. No login, no database, nothing to babysit.",
+    proof: "This machine",
+    host: "Host",
+    address: "Address",
+    time: "Time",
+    role: "Role",
+    site: "Site",
+    uptime: "Uptime",
+    fingerprint: "A little pattern from the hostname, so the primary and DR boxes look different.",
+    requests: "Requests",
     pid: "Process",
     python: "Runtime",
     health: "Health",
-    whyTitle: "Why this exists",
-    whyBody: "DR tests often recover a VM that nobody can prove is actually serving traffic. Beacon is a tiny public dummy: clone it, run one script, open a browser. If the beam is on, HTTP is working.",
-    why1: "One Python file. No packages to install.",
-    why2: "/health for load balancers, /api/status for JSON evidence.",
-    why3: "Works as a systemd service on a Linux dummy VM.",
-    why4: "Safe to share. There is nothing confidential on this page.",
-    down: "UNREACHABLE",
-    wait: "waiting",
+    whyTitle: "Why this is here",
+    whyBody: "You recover a VM, then someone asks if a website actually answers. Drop this on the dummy box, open it, take the screenshot.",
+    why1: "Just Python. Nothing extra to install.",
+    why2: "/health for monitors, /api/status for the raw details.",
+    why3: "One setup script on Linux.",
+    why4: "Nothing private on this page. Fine to share.",
+    down: "Offline",
   },
   id: {
-    pill: "ONLINE",
-    eyebrow: "Canary disaster recovery",
-    headline: "Kalau halaman ini kebuka, VM dummy-nya hidup.",
-    lede: "Bukti ringan buat latihan failover. Tanpa database, tanpa login, bukan halaman kosong — siap di-screenshot buat laporan DR.",
-    proof: "BUKTI HIDUP",
-    host: "HOST",
-    address: "ALAMAT",
-    time: "WAKTU",
-    role: "PERAN",
-    site: "SITUS",
-    uptime: "UPTIME",
-    fingerprint: "Sidik jari hostname — VM primary dan DR tidak akan tampak sama.",
-    requests: "Request terlayani",
+    pill: "Online",
+    eyebrow: "Situs dummy buat hari DR",
+    headline: "VM dummy-nya hidup.",
+    lede: "Halaman kecil yang bisa di-screenshot. Tanpa login, tanpa database, tidak ada yang perlu dirawat.",
+    proof: "Mesin ini",
+    host: "Host",
+    address: "Alamat",
+    time: "Waktu",
+    role: "Peran",
+    site: "Situs",
+    uptime: "Uptime",
+    fingerprint: "Pola kecil dari hostname, jadi mesin primary dan DR kelihatan beda.",
+    requests: "Request",
     pid: "Proses",
     python: "Runtime",
     health: "Health",
-    whyTitle: "Kenapa ada ini",
-    whyBody: "Tes DR sering recover VM tanpa bukti bahwa HTTP-nya benar-benar jalan. Beacon dummy kecil yang bisa di-clone, dijalankan satu skrip, lalu dibuka di browser. Kalau lampunya nyala, web-nya tembus.",
-    why1: "Satu file Python. Tidak perlu install package.",
-    why2: "/health buat load balancer, /api/status buat bukti JSON.",
-    why3: "Siap jadi service systemd di Linux dummy VM.",
-    why4: "Aman dibagi. Tidak ada data rahasia di halaman ini.",
-    down: "TIDAK TERJANGKAU",
-    wait: "menunggu",
+    whyTitle: "Kenapa ini ada",
+    whyBody: "VM-nya sudah recover, lalu ada yang tanya apakah web-nya benar-benar jawab. Taruh ini di dummy, buka, ambil screenshot.",
+    why1: "Cuma Python. Tidak perlu install apa-apa.",
+    why2: "/health buat monitor, /api/status kalau butuh datanya mentah.",
+    why3: "Satu skrip setup di Linux.",
+    why4: "Tidak ada data pribadi di sini. Aman dibagi.",
+    down: "Offline",
   },
 };
 
 const $ = (id) => document.getElementById(id);
 let lang = localStorage.getItem("beacon-lang") || "en";
 let lastUnix = 0;
+
+function isDown() {
+  return $("live-pill").classList.contains("is-down");
+}
 
 function applyLang() {
   const pack = COPY[lang] || COPY.en;
@@ -67,6 +69,7 @@ function applyLang() {
   document.querySelectorAll("[data-lang]").forEach((btn) => {
     btn.classList.toggle("is-on", btn.getAttribute("data-lang") === lang);
   });
+  if (lastUnix) setDown(isDown());
 }
 
 function hash(str) {
@@ -89,9 +92,9 @@ function drawIdenticon(seed) {
   canvas.width = size;
   canvas.height = size;
   const h = hash(seed || "beacon");
-  ctx.fillStyle = "#070b16";
+  ctx.fillStyle = "#121016";
   ctx.fillRect(0, 0, size, size);
-  const palette = ["#f5c16c", "#6ee7d2", "#e8edf7"];
+  const palette = ["#e0b56a", "#7ec49d", "#f3eee6"];
   for (let y = 0; y < n; y += 1) {
     for (let x = 0; x < 3; x += 1) {
       const on = ((h >>> (y * 3 + x)) & 1) === 1;
@@ -113,12 +116,15 @@ function formatUptime(seconds) {
   return `${sec}s`;
 }
 
-function setDown(isDown) {
+function setDown(offline) {
   const pack = COPY[lang] || COPY.en;
-  $("live-pill").classList.toggle("is-down", isDown);
-  $("live-pill").querySelector("[data-i18n='pill']").textContent = isDown ? pack.down : pack.pill;
-  $("ticket-state").textContent = isDown ? pack.down : "ONLINE";
-  $("val-health").textContent = isDown ? pack.down : "200 OK";
+  document.querySelectorAll(".live").forEach((el) => {
+    el.classList.toggle("is-down", offline);
+  });
+  document.querySelectorAll("[data-i18n='pill']").forEach((el) => {
+    el.textContent = offline ? pack.down : pack.pill;
+  });
+  $("val-health").textContent = offline ? pack.down : "200 OK";
 }
 
 async function refresh() {
@@ -129,7 +135,7 @@ async function refresh() {
     lastUnix = data.unix || Math.floor(Date.now() / 1000);
     $("val-host").textContent = data.hostname || "unknown";
     $("val-ip").textContent = (data.ips && data.ips[0]) || "127.0.0.1";
-    $("val-role").textContent = (data.role || "dummy").toUpperCase();
+    $("val-role").textContent = data.role || "dummy";
     $("val-site").textContent = data.site_name || "Beacon";
     $("val-uptime").textContent = formatUptime(data.uptime_seconds);
     $("val-req").textContent = Number(data.requests || 0).toLocaleString();
