@@ -1,6 +1,8 @@
 # Beacon Dummy
 
-Dummy website for disaster recovery drills. It listens on port 80. If the page opens, the VM is serving HTTP.
+Dummy website for disaster recovery drills. It listens on port 80 and 8080. If the page opens, the VM is serving HTTP.
+
+If Zscaler or another proxy blocks `http://VM_IP/`, open `http://VM_IP:8080/`.
 
 ## Install
 

@@ -30,9 +30,7 @@ def _env(name: str, default: str) -> str:
 
 
 BIND_HOST = "0.0.0.0"
-BIND_PORT = 80
-HOST = BIND_HOST
-PORT = BIND_PORT
+LISTEN_PORTS = (80, 8080)
 ROLE = _env("BEACON_ROLE", "dummy")
 SITE_NAME = _env("BEACON_SITE_NAME", "Beacon Canary")
 
@@ -108,7 +106,7 @@ def status_payload() -> dict:
         "python": platform.python_version(),
         "platform": platform.platform(),
         "pid": os.getpid(),
-        "port": PORT,
+        "ports": list(LISTEN_PORTS),
     }
 
 
@@ -189,13 +187,6 @@ class BeaconHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("X-Beacon", "alive")
         self.send_header("X-Beacon-Role", ROLE)
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "SAMEORIGIN")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header(
-            "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'",
-        )
         if cache:
             self.send_header("Cache-Control", "public, max-age=120")
         else:
@@ -205,14 +196,22 @@ class BeaconHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
 
-def already_running() -> bool:
-    url = "http://127.0.0.1:%s/health" % BIND_PORT
+def health_ok(port: int) -> bool:
+    url = "http://127.0.0.1:%s/health" % port
     try:
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=1) as res:
+        with urllib.request.urlopen(url, timeout=1) as res:
             return res.status == 200 and res.headers.get("X-Beacon") == "alive"
     except (OSError, urllib.error.URLError):
         return False
+
+
+def bind_one(port: int):
+    try:
+        return BeaconServer((BIND_HOST, port), BeaconHandler)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            return None
+        raise
 
 
 def main() -> int:
@@ -220,44 +219,49 @@ def main() -> int:
         sys.stderr.write("static/ folder is missing next to server.py\n")
         return 1
 
-    try:
-        httpd = BeaconServer((BIND_HOST, BIND_PORT), BeaconHandler)
-    except OSError as exc:
-        if exc.errno == errno.EADDRINUSE:
-            ip = (local_ips() or ["127.0.0.1"])[0]
-            page = "http://%s/" % ip if PORT == 80 else "http://%s:%s/" % (ip, PORT)
-            if already_running():
-                sys.stderr.write("Beacon is already running. Open %s\n" % page)
-                return 0
-            sys.stderr.write(
-                "Port %s is already in use.\n"
-                "If Beacon was installed, open %s\n"
-                "To update it, run: sudo ./install.sh\n" % (PORT, page)
-            )
-            return 1
-        raise
+    servers = []
+    for port in LISTEN_PORTS:
+        httpd = bind_one(port)
+        if httpd is None:
+            if health_ok(port):
+                sys.stderr.write("Beacon is already running on port %s.\n" % port)
+            else:
+                sys.stderr.write("Port %s is in use, skipping.\n" % port)
+            continue
+        servers.append((port, httpd))
+
+    if not servers:
+        sys.stderr.write("Could not bind port 80 or 8080. Run: sudo ./uninstall.sh && sudo ./install.sh\n")
+        return 1
+
+    stop = threading.Event()
 
     def shutdown(signum, _frame):
         sys.stderr.write("\nbeacon: shutting down (%s)\n" % signum)
-        threading.Thread(target=httpd.shutdown, daemon=True).start()
+        for _port, httpd in servers:
+            threading.Thread(target=httpd.shutdown, daemon=True).start()
+        stop.set()
 
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
 
+    for _port, httpd in servers:
+        threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.5}, daemon=True).start()
+
+    bound = ", ".join(str(port) for port, _httpd in servers)
     banner = [
         "",
         "  Beacon Dummy  ·  DR canary",
         "  --------------------------------",
         "  site     %s" % SITE_NAME,
         "  role     %s" % ROLE,
-        "  listen   http://%s:%s" % (HOST, PORT),
+        "  listen   %s" % bound,
         "  health   /health  /api/status",
         "",
     ]
     sys.stderr.write("\n".join(banner) + "\n")
-    try:
-        httpd.serve_forever(poll_interval=0.5)
-    finally:
+    stop.wait()
+    for _port, httpd in servers:
         httpd.server_close()
     return 0
 

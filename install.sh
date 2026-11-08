@@ -105,7 +105,8 @@ purge_beacon() {
   pkill -f "beacon-dummy/server.py" 2>/dev/null || true
   pkill -f "beacon-dummy.*server.py" 2>/dev/null || true
   if command -v fuser >/dev/null; then
-    fuser -k "${PORT}/tcp" 2>/dev/null || true
+    fuser -k 80/tcp 2>/dev/null || true
+    fuser -k 8080/tcp 2>/dev/null || true
   fi
   rm -rf "$INSTALL_DIR" "$DROPIN_DIR" "$STATE_DIR"
   rm -f "$SERVICE_FILE" "$ENV_FILE" "$CRON_FILE" "$SYSCTL_FILE" "$LOG_FILE"
@@ -156,19 +157,23 @@ precheck() {
 }
 
 open_firewall() {
-  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -qi "Status: active"; then
-    ufw allow 80/tcp >/dev/null || true
-  fi
+  local p
+  for p in 80 8080; do
+    if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -qi "Status: active"; then
+      ufw allow "${p}/tcp" >/dev/null || true
+    fi
+    if command -v iptables >/dev/null; then
+      iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null \
+        || iptables -I INPUT 1 -p tcp --dport "$p" -j ACCEPT || true
+    fi
+  done
   if command -v firewall-cmd >/dev/null && firewall-cmd --state 2>/dev/null | grep -qi running; then
     local zone
     for zone in $(firewall-cmd --get-zones 2>/dev/null); do
       firewall-cmd --permanent --zone="$zone" --add-port=80/tcp >/dev/null 2>&1 || true
+      firewall-cmd --permanent --zone="$zone" --add-port=8080/tcp >/dev/null 2>&1 || true
     done
     firewall-cmd --reload >/dev/null || true
-  fi
-  if command -v iptables >/dev/null; then
-    iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null \
-      || iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
   fi
 }
 
@@ -195,6 +200,7 @@ wait_health() {
   local i
   for i in $(seq 1 40); do
     beacon_ok "127.0.0.1" && return 0
+    beacon_ok "127.0.0.1:8080" && return 0
     sleep 0.25
   done
   return 1
@@ -299,23 +305,19 @@ else
 fi
 
 if ! wait_health; then
-  echo "Beacon did not become healthy on port 80." >&2
+  echo "Beacon did not become healthy on port 80 or 8080." >&2
   port_users
   command -v journalctl >/dev/null && journalctl -u "$APP_NAME" -n 50 --no-pager || true
   exit 1
 fi
 
 IP="$(detect_ip)"
-if ! beacon_ok "$IP"; then
-  echo "Localhost is healthy, but ${IP}:80 is not. Opening firewall again..."
-  open_firewall
-  sleep 1
-  beacon_ok "$IP" || echo "Still blocked on ${IP}. Check the hypervisor / security group for TCP 80."
-fi
-
+open_firewall
 echo
 echo "Beacon is up and enabled on boot."
-echo "  page    http://${IP}/"
-echo "  health  http://${IP}/health"
-command -v ss >/dev/null && ss -lnt | grep ':80' || true
+echo "  page     http://${IP}/"
+echo "  alt      http://${IP}:8080/"
+echo "  health   http://${IP}/health"
+echo "  If Zscaler blocks port 80, use :8080"
+command -v ss >/dev/null && ss -lnt | grep -E ':80|:8080' || true
 echo
