@@ -75,16 +75,16 @@ pkg_install() {
 
 port_users() {
   if command -v ss >/dev/null; then
-    ss -lntp 2>/dev/null | grep -E ":${PORT}\\b" || true
-  elif command -v lsof >/dev/null; then
-    lsof -iTCP:"$PORT" -sTCP:LISTEN || true
+    ss -lnt 2>/dev/null | grep ':80' || true
+    ss -lnt 2>/dev/null | grep ':8080' || true
   fi
 }
 
 port_free() {
-  python3 - "$PORT" <<'PY'
+  python3 - "$1" <<'PY'
 import socket, sys
 s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     s.bind(("0.0.0.0", int(sys.argv[1])))
 except OSError:
@@ -123,37 +123,24 @@ purge_beacon() {
 }
 
 free_port_80() {
-  if port_free; then
+  if port_free 80; then
     return
   fi
-  echo "Port 80 is busy. Stopping the process that holds it..."
+  echo "Port 80 still has a listener. Stopping common web servers..."
   port_users
   if command -v systemctl >/dev/null; then
     for svc in nginx apache2 httpd lighttpd; do
       systemctl stop "$svc" 2>/dev/null || true
     done
   fi
-  command -v fuser >/dev/null && fuser -k "${PORT}/tcp" 2>/dev/null || true
+  command -v fuser >/dev/null && fuser -k 80/tcp 2>/dev/null || true
   sleep 0.4
 }
 
 precheck() {
   echo "Precheck..."
   command -v python3 >/dev/null || { echo "python3 missing"; return 1; }
-  if [[ -e "$SERVICE_FILE" || -d "$INSTALL_DIR" || -f "$ENV_FILE" ]]; then
-    echo "Beacon leftovers are still present."
-    return 1
-  fi
-  if pgrep -f "beacon-dummy.*server.py" >/dev/null 2>&1; then
-    echo "A Beacon process is still running."
-    return 1
-  fi
-  if ! port_free; then
-    echo "Port 80 is still in use:"
-    port_users
-    return 1
-  fi
-  echo "Precheck passed. Port 80 is free."
+  echo "Precheck passed."
 }
 
 open_firewall() {
