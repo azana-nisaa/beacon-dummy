@@ -25,7 +25,7 @@ usage() {
 Beacon Dummy installer
 
   sudo ./install.sh
-  sudo ./install.sh --port 80 --name "Customer DR Canary"
+  sudo ./install.sh --name "Customer DR Canary"
   sudo ./install.sh --uninstall
 
 After this finishes, the site is running and it comes back after reboot.
@@ -136,7 +136,7 @@ load_existing_env() {
     set +a
   fi
   if [[ "$PORT_SET" -eq 0 ]]; then
-    PORT="${BEACON_PORT:-80}"
+    PORT=80
   fi
   if [[ "$ROLE_SET" -eq 0 ]]; then
     ROLE="${BEACON_ROLE:-dummy}"
@@ -171,16 +171,11 @@ pick_port() {
     return
   fi
   if port_busy "$PORT"; then
-    if [[ "$PORT_SET" -eq 1 ]]; then
-      echo "Port $PORT is already in use."
-      exit 1
-    fi
-    echo "Port $PORT is busy. Using 8080."
-    PORT=8080
-    if port_busy "$PORT"; then
-      echo "Port 8080 is also in use. Stop the other service, then re-run."
-      exit 1
-    fi
+    echo "Port ${PORT} is already in use."
+    echo "Stop the other web server, then re-run the installer:"
+    echo "  sudo systemctl stop nginx apache2 httpd 2>/dev/null || true"
+    echo "  sudo ./install.sh"
+    exit 1
   fi
 }
 

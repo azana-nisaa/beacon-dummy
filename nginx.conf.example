@@ -1,6 +1,9 @@
-# Optional reverse proxy in front of Beacon Dummy.
-# Copy to /etc/nginx/conf.d/beacon-dummy.conf and reload nginx.
-# Beacon itself still runs on 8080 via systemd.
+# Optional. The installer already binds Beacon to port 80,
+# so you do not need nginx for a normal dummy VM.
+#
+# Use this only if you want nginx in front, for example TLS on 443.
+# In that case run: sudo ./install.sh --port 8080
+# then copy this file to /etc/nginx/conf.d/beacon-dummy.conf and reload nginx.
 
 server {
     listen 80 default_server;

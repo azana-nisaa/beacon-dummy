@@ -25,11 +25,9 @@ Then open `http://VM_IP`.
 Optional flags:
 
 ```bash
-sudo ./install.sh --port 80 --role dummy --name "Customer DR Canary"
+sudo ./install.sh --name "Customer DR Canary"
 sudo ./install.sh --uninstall
 ```
-
-If port 80 is already taken, the installer uses 8080 and prints that URL.
 
 ## After install
 
@@ -41,7 +39,7 @@ If port 80 is already taken, the installer uses 8080 and prints that URL.
 | Config | `/etc/default/beacon-dummy` |
 | Logs | `journalctl -u beacon-dummy -f` |
 
-Re-running `sudo ./install.sh` updates the files and keeps the current name, role, and port.
+Re-running `sudo ./install.sh` updates the files and keeps the current name and role. It always listens on port 80.
 
 ## Foreground (no service)
 

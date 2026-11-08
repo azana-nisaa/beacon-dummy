@@ -23,7 +23,7 @@ REQUESTS = 0
 LOCK = threading.Lock()
 
 HOST = os.environ.get("BEACON_HOST", "0.0.0.0")
-PORT = int(os.environ.get("BEACON_PORT", "8080"))
+PORT = int(os.environ.get("BEACON_PORT", "80"))
 ROLE = os.environ.get("BEACON_ROLE", "dummy")
 SITE_NAME = os.environ.get("BEACON_SITE_NAME", "Beacon Canary")
 
