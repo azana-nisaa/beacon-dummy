@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command on the dummy VM:
+#   sudo ./uninstall.sh
 #   sudo ./install.sh
 #   curl -fsSL https://raw.githubusercontent.com/azana-nisaa/beacon-dummy/main/install.sh | sudo bash
 set -euo pipefail
@@ -7,8 +7,12 @@ set -euo pipefail
 APP_NAME="beacon-dummy"
 INSTALL_DIR="/opt/beacon-dummy"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
+DROPIN_DIR="/etc/systemd/system/${APP_NAME}.service.d"
 ENV_FILE="/etc/default/${APP_NAME}"
 CRON_FILE="/etc/cron.d/${APP_NAME}"
+SYSCTL_FILE="/etc/sysctl.d/80-beacon-dummy.conf"
+LOG_FILE="/var/log/beacon-dummy.log"
+STATE_DIR="/var/lib/beacon-dummy"
 SERVICE_USER="beacon"
 REPO_TARBALL="https://github.com/azana-nisaa/beacon-dummy/archive/refs/heads/main.tar.gz"
 PORT=80
@@ -27,9 +31,8 @@ self_dir() {
 }
 
 SRC_DIR="$(self_dir)"
-is_root() { [[ "${EUID}" -eq 0 ]]; }
 
-if ! is_root; then
+if [[ "${EUID}" -ne 0 ]]; then
   if [[ -z "$SRC_DIR" ]]; then
     echo "Run: curl -fsSL https://raw.githubusercontent.com/azana-nisaa/beacon-dummy/main/install.sh | sudo bash" >&2
     exit 1
@@ -43,7 +46,9 @@ while [[ $# -gt 0 ]]; do
     --name) SITE_NAME="$2"; NAME_SET=1; shift 2 ;;
     --uninstall) UNINSTALL=1; shift ;;
     -h|--help)
-      echo "Usage: sudo ./install.sh [--name TITLE] [--role dummy|dr|primary] [--uninstall]"
+      echo "Usage:"
+      echo "  sudo ./uninstall.sh"
+      echo "  sudo ./install.sh [--name TITLE] [--role dummy]"
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -68,157 +73,103 @@ pkg_install() {
   esac
 }
 
-ensure_python() {
-  command -v python3 >/dev/null 2>&1 && return
-  pkg_install python3
-}
-
-fetch_source() {
-  [[ -n "$SRC_DIR" && -f "$SRC_DIR/server.py" && -d "$SRC_DIR/static" ]] && return
-  echo "Downloading Beacon Dummy..."
-  command -v tar >/dev/null || pkg_install tar
-  local tmp
-  tmp="$(mktemp -d)"
-  if command -v curl >/dev/null; then
-    curl -fsSL "$REPO_TARBALL" -o "$tmp/src.tgz"
-  else
-    pkg_install curl
-    curl -fsSL "$REPO_TARBALL" -o "$tmp/src.tgz"
+port_users() {
+  if command -v ss >/dev/null; then
+    ss -lntp 2>/dev/null | grep -E ":${PORT}\\b" || true
+  elif command -v lsof >/dev/null; then
+    lsof -iTCP:"$PORT" -sTCP:LISTEN || true
   fi
-  tar -xzf "$tmp/src.tgz" -C "$tmp"
-  SRC_DIR="$(dirname "$(find "$tmp" -maxdepth 2 -name server.py | head -n 1)")"
-  [[ -f "$SRC_DIR/server.py" ]] || { echo "Download failed." >&2; exit 1; }
 }
 
-load_name() {
-  if [[ -f "$ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
-    set -a
-    # shellcheck disable=SC1091
-    source "$ENV_FILE" || true
-    set +a
-    [[ "$ROLE_SET" -eq 0 ]] && ROLE="${BEACON_ROLE:-$ROLE}"
-    [[ "$NAME_SET" -eq 0 ]] && SITE_NAME="${BEACON_SITE_NAME:-$SITE_NAME}"
-  fi
-  ROLE="${ROLE//\'/}"
-  ROLE="${ROLE//\"/}"
-  SITE_NAME="${SITE_NAME//\'/}"
-  SITE_NAME="${SITE_NAME//\"/}"
-  PORT=80
+port_free() {
+  python3 - "$PORT" <<'PY'
+import socket, sys
+s = socket.socket()
+try:
+    s.bind(("0.0.0.0", int(sys.argv[1])))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+sys.exit(0)
+PY
 }
 
-stop_old() {
+purge_beacon() {
+  echo "Cleaning previous Beacon Dummy files and processes..."
   if command -v systemctl >/dev/null; then
+    systemctl disable --now "$APP_NAME" 2>/dev/null || true
     systemctl stop "$APP_NAME" 2>/dev/null || true
+  fi
+  pkill -f "/opt/beacon-dummy/server.py" 2>/dev/null || true
+  pkill -f "beacon-dummy/server.py" 2>/dev/null || true
+  pkill -f "beacon-dummy.*server.py" 2>/dev/null || true
+  if command -v fuser >/dev/null; then
+    fuser -k "${PORT}/tcp" 2>/dev/null || true
+  fi
+  rm -rf "$INSTALL_DIR" "$DROPIN_DIR" "$STATE_DIR"
+  rm -f "$SERVICE_FILE" "$ENV_FILE" "$CRON_FILE" "$SYSCTL_FILE" "$LOG_FILE"
+  if command -v systemctl >/dev/null; then
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl reset-failed "$APP_NAME" 2>/dev/null || true
+  fi
+  userdel "$SERVICE_USER" 2>/dev/null || true
+  groupdel "$SERVICE_USER" 2>/dev/null || true
+  if [[ -w /proc/sys/net/ipv4/ip_unprivileged_port_start ]]; then
+    echo 1024 > /proc/sys/net/ipv4/ip_unprivileged_port_start 2>/dev/null || true
+  fi
+  sleep 0.4
+}
+
+free_port_80() {
+  if port_free; then
+    return
+  fi
+  echo "Port 80 is busy. Stopping the process that holds it..."
+  port_users
+  if command -v systemctl >/dev/null; then
     for svc in nginx apache2 httpd lighttpd; do
       systemctl stop "$svc" 2>/dev/null || true
-      systemctl disable "$svc" 2>/dev/null || true
     done
   fi
-  pkill -f "beacon-dummy.*server.py" 2>/dev/null || true
-  pkill -f "/opt/beacon-dummy/server.py" 2>/dev/null || true
-  sleep 0.3
+  command -v fuser >/dev/null && fuser -k "${PORT}/tcp" 2>/dev/null || true
+  sleep 0.4
 }
 
-copy_app() {
-  mkdir -p "$INSTALL_DIR"
-  if command -v rsync >/dev/null; then
-    rsync -a --delete --exclude '.git' --exclude '.env' --exclude '__pycache__' "$SRC_DIR/" "$INSTALL_DIR/"
-  else
-    find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name '.env' -exec rm -rf {} +
-    cp -a "$SRC_DIR/." "$INSTALL_DIR/"
-    rm -rf "$INSTALL_DIR/.git"
+precheck() {
+  echo "Precheck..."
+  command -v python3 >/dev/null || { echo "python3 missing"; return 1; }
+  if [[ -e "$SERVICE_FILE" || -d "$INSTALL_DIR" || -f "$ENV_FILE" ]]; then
+    echo "Beacon leftovers are still present."
+    return 1
   fi
-  id "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER" 2>/dev/null \
-    || useradd --system --home "$INSTALL_DIR" --shell /sbin/nologin "$SERVICE_USER"
-  chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
-  chmod 755 "$INSTALL_DIR" "$INSTALL_DIR"/server.py "$INSTALL_DIR"/install.sh "$INSTALL_DIR"/setup.sh "$INSTALL_DIR"/start.sh
-}
-
-write_env() {
-  cat > "$ENV_FILE" <<EOF
-BEACON_HOST=0.0.0.0
-BEACON_PORT=80
-BEACON_ROLE=${ROLE}
-BEACON_SITE_NAME=${SITE_NAME}
-EOF
-  chmod 644 "$ENV_FILE"
-}
-
-allow_port_80() {
-  if [[ -w /proc/sys/net/ipv4/ip_unprivileged_port_start ]]; then
-    echo 80 > /proc/sys/net/ipv4/ip_unprivileged_port_start || true
-    mkdir -p /etc/sysctl.d
-    echo "net.ipv4.ip_unprivileged_port_start=80" > /etc/sysctl.d/80-beacon-dummy.conf
+  if pgrep -f "beacon-dummy.*server.py" >/dev/null 2>&1; then
+    echo "A Beacon process is still running."
+    return 1
   fi
+  if ! port_free; then
+    echo "Port 80 is still in use:"
+    port_users
+    return 1
+  fi
+  echo "Precheck passed. Port 80 is free."
+}
+
+open_firewall() {
   if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -qi "Status: active"; then
     ufw allow 80/tcp >/dev/null || true
   fi
   if command -v firewall-cmd >/dev/null && firewall-cmd --state 2>/dev/null | grep -qi running; then
-    firewall-cmd --permanent --add-service=http >/dev/null 2>&1 \
-      || firewall-cmd --permanent --add-port=80/tcp >/dev/null || true
+    local zone
+    for zone in $(firewall-cmd --get-zones 2>/dev/null); do
+      firewall-cmd --permanent --zone="$zone" --add-port=80/tcp >/dev/null 2>&1 || true
+    done
     firewall-cmd --reload >/dev/null || true
   fi
   if command -v iptables >/dev/null; then
     iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null \
       || iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT || true
-    if command -v netfilter-persistent >/dev/null; then
-      netfilter-persistent save >/dev/null 2>&1 || true
-    elif command -v service >/dev/null; then
-      service iptables save >/dev/null 2>&1 || true
-    fi
   fi
-}
-
-write_unit() {
-  local user="$1"
-  cat > "$SERVICE_FILE" <<EOF
-[Unit]
-Description=Beacon Dummy DR canary
-After=network-online.target network.target
-Wants=network-online.target
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-User=${user}
-WorkingDirectory=${INSTALL_DIR}
-Environment=BEACON_HOST=0.0.0.0
-Environment=BEACON_PORT=80
-EnvironmentFile=-${ENV_FILE}
-ExecStart=${PYTHON_BIN} ${INSTALL_DIR}/server.py
-Restart=always
-RestartSec=2
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  chmod 644 "$SERVICE_FILE"
-}
-
-start_unit() {
-  systemctl daemon-reload
-  systemctl enable "$APP_NAME" >/dev/null
-  systemctl restart "$APP_NAME"
-}
-
-wait_health() {
-  python3 - "$PORT" <<'PY'
-import sys, time, urllib.request
-port = sys.argv[1]
-url = "http://127.0.0.1:%s/health" % port
-for _ in range(40):
-    try:
-        res = urllib.request.urlopen(url, timeout=1)
-        if res.status == 200 and res.headers.get("X-Beacon") == "alive":
-            sys.exit(0)
-    except Exception:
-        time.sleep(0.25)
-sys.exit(1)
-PY
 }
 
 detect_ip() {
@@ -228,54 +179,143 @@ detect_ip() {
   echo "${ip:-127.0.0.1}"
 }
 
-uninstall_app() {
-  command -v systemctl >/dev/null && systemctl disable --now "$APP_NAME" 2>/dev/null || true
-  pkill -f "beacon-dummy.*server.py" 2>/dev/null || true
-  rm -f "$SERVICE_FILE" "$ENV_FILE" "$CRON_FILE" /etc/sysctl.d/80-beacon-dummy.conf
-  command -v systemctl >/dev/null && systemctl daemon-reload || true
-  rm -rf "$INSTALL_DIR"
-  userdel "$SERVICE_USER" 2>/dev/null || true
-  echo "Removed ${APP_NAME}."
+beacon_ok() {
+  python3 - "$1" <<'PY'
+import sys, urllib.request
+url = "http://%s/health" % sys.argv[1]
+try:
+    res = urllib.request.urlopen(url, timeout=2)
+    sys.exit(0 if res.status == 200 and res.headers.get("X-Beacon") == "alive" else 1)
+except Exception:
+    sys.exit(1)
+PY
+}
+
+wait_health() {
+  local i
+  for i in $(seq 1 40); do
+    beacon_ok "127.0.0.1" && return 0
+    sleep 0.25
+  done
+  return 1
+}
+
+fetch_source() {
+  [[ -n "$SRC_DIR" && -f "$SRC_DIR/server.py" && -d "$SRC_DIR/static" ]] && return
+  echo "Downloading Beacon Dummy..."
+  command -v tar >/dev/null || pkg_install tar
+  command -v curl >/dev/null || pkg_install curl
+  local tmp
+  tmp="$(mktemp -d)"
+  curl -fsSL "$REPO_TARBALL" -o "$tmp/src.tgz"
+  tar -xzf "$tmp/src.tgz" -C "$tmp"
+  SRC_DIR="$(dirname "$(find "$tmp" -maxdepth 2 -name server.py | head -n 1)")"
+  [[ -f "$SRC_DIR/server.py" ]] || { echo "Download failed." >&2; exit 1; }
+}
+
+copy_app() {
+  mkdir -p "$INSTALL_DIR"
+  if command -v rsync >/dev/null; then
+    rsync -a --delete --exclude '.git' --exclude '.env' --exclude '__pycache__' "$SRC_DIR/" "$INSTALL_DIR/"
+  else
+    cp -a "$SRC_DIR/." "$INSTALL_DIR/"
+    rm -rf "$INSTALL_DIR/.git"
+  fi
+  chmod 755 "$INSTALL_DIR"/*.sh "$INSTALL_DIR"/server.py
+}
+
+write_env() {
+  ROLE="${ROLE//\'/}"
+  ROLE="${ROLE//\"/}"
+  SITE_NAME="${SITE_NAME//\'/}"
+  SITE_NAME="${SITE_NAME//\"/}"
+  cat > "$ENV_FILE" <<EOF
+BEACON_HOST=0.0.0.0
+BEACON_PORT=80
+BEACON_ROLE=${ROLE}
+BEACON_SITE_NAME=${SITE_NAME}
+EOF
+}
+
+write_unit() {
+  local python_bin
+  python_bin="$(command -v python3)"
+  cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=Beacon Dummy DR canary
+After=network-online.target network.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=${INSTALL_DIR}
+Environment=BEACON_HOST=0.0.0.0
+Environment=BEACON_PORT=80
+EnvironmentFile=-${ENV_FILE}
+ExecStart=${python_bin} ${INSTALL_DIR}/server.py
+Restart=always
+RestartSec=2
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
 }
 
 if [[ "$UNINSTALL" -eq 1 ]]; then
-  uninstall_app
+  purge_beacon
+  if pgrep -f "beacon-dummy.*server.py" >/dev/null 2>&1 || [[ -d "$INSTALL_DIR" ]]; then
+    echo "Uninstall did not finish cleanly." >&2
+    exit 1
+  fi
+  echo "Beacon Dummy is fully removed. Port 80 should now be free."
+  port_users
   exit 0
 fi
 
 fetch_source
-ensure_python
-PYTHON_BIN="$(command -v python3)"
-load_name
-stop_old
+command -v python3 >/dev/null || pkg_install python3
+purge_beacon
+free_port_80
+if ! precheck; then
+  echo "Precheck failed. Run: sudo ./uninstall.sh" >&2
+  exit 1
+fi
+
 copy_app
 write_env
-allow_port_80
+open_firewall
 
 if command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
-  write_unit "$SERVICE_USER"
-  start_unit
-  if ! wait_health; then
-    echo "Port 80 bind as ${SERVICE_USER} failed, retrying as root..."
-    write_unit root
-    start_unit
-  fi
+  write_unit
+  systemctl daemon-reload
+  systemctl enable "$APP_NAME" >/dev/null
+  systemctl restart "$APP_NAME"
 else
-  echo "@reboot root ${PYTHON_BIN} ${INSTALL_DIR}/server.py" > "$CRON_FILE"
+  echo "@reboot root $(command -v python3) ${INSTALL_DIR}/server.py" > "$CRON_FILE"
   chmod 644 "$CRON_FILE"
-  nohup "$PYTHON_BIN" "$INSTALL_DIR/server.py" >/var/log/beacon-dummy.log 2>&1 &
+  nohup python3 "$INSTALL_DIR/server.py" >"$LOG_FILE" 2>&1 &
 fi
 
 if ! wait_health; then
-  echo "Beacon did not start on port 80." >&2
-  command -v journalctl >/dev/null && journalctl -u "$APP_NAME" -n 40 --no-pager || true
+  echo "Beacon did not become healthy on port 80." >&2
+  port_users
+  command -v journalctl >/dev/null && journalctl -u "$APP_NAME" -n 50 --no-pager || true
   exit 1
 fi
 
 IP="$(detect_ip)"
+if ! beacon_ok "$IP"; then
+  echo "Localhost is healthy, but ${IP}:80 is not. Opening firewall again..."
+  open_firewall
+  sleep 1
+  beacon_ok "$IP" || echo "Still blocked on ${IP}. Check the hypervisor / security group for TCP 80."
+fi
+
 echo
 echo "Beacon is up and enabled on boot."
 echo "  page    http://${IP}/"
 echo "  health  http://${IP}/health"
-echo "  logs    journalctl -u ${APP_NAME} -f"
+command -v ss >/dev/null && ss -lnt | grep ':80' || true
 echo

@@ -29,8 +29,10 @@ def _env(name: str, default: str) -> str:
     return os.environ.get(name, default).strip().strip("'\"") or default
 
 
-HOST = _env("BEACON_HOST", "0.0.0.0")
-PORT = int(_env("BEACON_PORT", "80"))
+BIND_HOST = "0.0.0.0"
+BIND_PORT = 80
+HOST = BIND_HOST
+PORT = BIND_PORT
 ROLE = _env("BEACON_ROLE", "dummy")
 SITE_NAME = _env("BEACON_SITE_NAME", "Beacon Canary")
 
@@ -204,7 +206,7 @@ class BeaconHandler(BaseHTTPRequestHandler):
 
 
 def already_running() -> bool:
-    url = "http://127.0.0.1:%s/health" % PORT
+    url = "http://127.0.0.1:%s/health" % BIND_PORT
     try:
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=1) as res:
@@ -219,7 +221,7 @@ def main() -> int:
         return 1
 
     try:
-        httpd = BeaconServer((HOST, PORT), BeaconHandler)
+        httpd = BeaconServer((BIND_HOST, BIND_PORT), BeaconHandler)
     except OSError as exc:
         if exc.errno == errno.EADDRINUSE:
             ip = (local_ips() or ["127.0.0.1"])[0]
