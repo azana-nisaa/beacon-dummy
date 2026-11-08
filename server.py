@@ -103,8 +103,14 @@ def status_payload() -> dict:
     }
 
 
+class BeaconServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 class BeaconHandler(BaseHTTPRequestHandler):
     server_version = "BeaconDummy/1.0"
+    sys_version = ""
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args) -> None:
@@ -174,6 +180,13 @@ class BeaconHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("X-Beacon", "alive")
         self.send_header("X-Beacon-Role", ROLE)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'",
+        )
         if cache:
             self.send_header("Cache-Control", "public, max-age=120")
         else:
@@ -188,7 +201,7 @@ def main() -> int:
         sys.stderr.write("static/ folder is missing next to server.py\n")
         return 1
 
-    httpd = ThreadingHTTPServer((HOST, PORT), BeaconHandler)
+    httpd = BeaconServer((HOST, PORT), BeaconHandler)
 
     def shutdown(signum, _frame):
         sys.stderr.write("\nbeacon: shutting down (%s)\n" % signum)

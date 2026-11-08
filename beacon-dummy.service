@@ -1,7 +1,8 @@
 [Unit]
 Description=Beacon Dummy DR canary
-After=network-online.target
+After=network-online.target network.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -12,9 +13,26 @@ WorkingDirectory=/opt/beacon-dummy
 ExecStart=/usr/bin/python3 /opt/beacon-dummy/server.py
 Restart=always
 RestartSec=2
-AmbientCapabilities=CAP_NET_BIND_SERVICE
+KillSignal=SIGTERM
+TimeoutStopSec=10
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+PrivateDevices=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
