@@ -25,10 +25,14 @@ STARTED_AT = time.time()
 REQUESTS = 0
 LOCK = threading.Lock()
 
-HOST = os.environ.get("BEACON_HOST", "0.0.0.0")
-PORT = int(os.environ.get("BEACON_PORT", "80"))
-ROLE = os.environ.get("BEACON_ROLE", "dummy")
-SITE_NAME = os.environ.get("BEACON_SITE_NAME", "Beacon Canary")
+def _env(name: str, default: str) -> str:
+    return os.environ.get(name, default).strip().strip("'\"") or default
+
+
+HOST = _env("BEACON_HOST", "0.0.0.0")
+PORT = int(_env("BEACON_PORT", "80"))
+ROLE = _env("BEACON_ROLE", "dummy")
+SITE_NAME = _env("BEACON_SITE_NAME", "Beacon Canary")
 
 MIME = {
     ".css": "text/css; charset=utf-8",
