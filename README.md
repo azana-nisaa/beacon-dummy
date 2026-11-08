@@ -22,6 +22,8 @@ sudo ./install.sh
 
 Then open `http://VM_IP`.
 
+`install.sh`, `setup.sh`, and `start.sh` all do the same job. Safe to run again after `git pull`. If the site is already up, it is restarted on port 80.
+
 Optional flags:
 
 ```bash
@@ -40,12 +42,6 @@ sudo ./install.sh --uninstall
 | Logs | `journalctl -u beacon-dummy -f` |
 
 Re-running `sudo ./install.sh` updates the files and keeps the current name and role. It always listens on port 80.
-
-## Foreground (no service)
-
-```bash
-./start.sh
-```
 
 ## License
 

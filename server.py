@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import platform
@@ -12,6 +13,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -196,12 +199,37 @@ class BeaconHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
 
+def already_running() -> bool:
+    url = "http://127.0.0.1:%s/health" % PORT
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=1) as res:
+            return res.status == 200 and res.headers.get("X-Beacon") == "alive"
+    except (OSError, urllib.error.URLError):
+        return False
+
+
 def main() -> int:
     if not STATIC.exists():
         sys.stderr.write("static/ folder is missing next to server.py\n")
         return 1
 
-    httpd = BeaconServer((HOST, PORT), BeaconHandler)
+    try:
+        httpd = BeaconServer((HOST, PORT), BeaconHandler)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            ip = (local_ips() or ["127.0.0.1"])[0]
+            page = "http://%s/" % ip if PORT == 80 else "http://%s:%s/" % (ip, PORT)
+            if already_running():
+                sys.stderr.write("Beacon is already running. Open %s\n" % page)
+                return 0
+            sys.stderr.write(
+                "Port %s is already in use.\n"
+                "If Beacon was installed, open %s\n"
+                "To update it, run: sudo ./install.sh\n" % (PORT, page)
+            )
+            return 1
+        raise
 
     def shutdown(signum, _frame):
         sys.stderr.write("\nbeacon: shutting down (%s)\n" % signum)

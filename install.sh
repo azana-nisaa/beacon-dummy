@@ -166,13 +166,41 @@ ours_active() {
   command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$APP_NAME"
 }
 
-pick_port() {
-  if ours_active; then
+beacon_healthy() {
+  python3 - "$1" <<'PY'
+import sys, urllib.request
+port = sys.argv[1]
+url = "http://127.0.0.1:%s/health" % port
+try:
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=1) as res:
+        if res.status == 200 and res.headers.get("X-Beacon") == "alive":
+            sys.exit(0)
+except Exception:
+    pass
+sys.exit(1)
+PY
+}
+
+stop_existing() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop "$APP_NAME" 2>/dev/null || true
+  fi
+  pkill -f "${INSTALL_DIR}/server.py" 2>/dev/null || true
+  if [[ -n "${SRC_DIR}" && "${SRC_DIR}" != "${INSTALL_DIR}" ]]; then
+    pkill -f "${SRC_DIR}/server.py" 2>/dev/null || true
+  fi
+  sleep 0.4
+}
+
+prepare_port() {
+  if ours_active || beacon_healthy "$PORT"; then
+    stop_existing
     return
   fi
   if port_busy "$PORT"; then
-    echo "Port ${PORT} is already in use."
-    echo "Stop the other web server, then re-run the installer:"
+    echo "Port ${PORT} is already in use by another program."
+    echo "Stop it, then re-run:"
     echo "  sudo systemctl stop nginx apache2 httpd 2>/dev/null || true"
     echo "  sudo ./install.sh"
     exit 1
@@ -399,7 +427,7 @@ fi
 fetch_source
 ensure_python
 load_existing_env
-pick_port
+prepare_port
 ensure_user
 copy_app
 write_env
